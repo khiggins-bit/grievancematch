@@ -418,6 +418,25 @@ button {
 .dialog p { font-family: var(--serif); font-size: 1.15rem; margin: 0 0 1.2rem; }
 .dialog .btn { font-size: 1.05rem; padding: 0.6rem 1.4rem; }
 
+.btn.alt { background: var(--navy); color: var(--on-navy); border: 2px solid var(--gold); }
+.btn.linkbtn { display: inline-block; text-decoration: none; }
+.dialog .btn + .btn, .dialog .btn + a.btn, .dialog a.btn + .btn { margin-left: 0.5rem; margin-top: 0.5rem; }
+#codeOverlay { z-index: 300; }
+.code-value {
+  font-family: var(--serif);
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: 0.25em;
+  padding-left: 0.25em;
+  color: var(--ink);
+  margin: 0.2rem 0 1rem;
+}
+.code-note { font-family: var(--sans); font-size: 0.95rem; color: var(--muted); }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(168, 121, 31, 0); }
+  50% { box-shadow: 0 0 0 7px rgba(220, 174, 82, 0.55); }
+}
+.btn.pulse { animation: pulse 1.4s ease-in-out 4; }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-7px); }
@@ -431,7 +450,7 @@ button {
   100% { transform: scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bucket.shake, .chip { animation: none; }
+  .bucket.shake, .chip, .btn.pulse { animation: none; }
   .seal { transition: none; }
 }
 </style>
@@ -463,6 +482,7 @@ button {
   <div class="msg" id="msg" role="status" aria-live="polite">Choose an event and match it to a grievance.</div>
   <div class="score" id="score">0/23 matched</div>
   <button class="btn" id="resetBtn" type="button">Reset game</button>
+  <button class="btn alt" id="codeBtn" type="button" hidden>Generate Completion Code</button>
 </div>
 
 <main class="layout">
@@ -484,6 +504,17 @@ button {
     <h2 id="ovTitle"></h2>
     <p id="ovText"></p>
     <button class="btn" id="ovBtn" type="button">Reset and play again</button>
+    <button class="btn alt" id="ovCodeBtn" type="button" hidden>Generate Completion Code</button>
+  </div>
+</div>
+
+<div class="overlay" id="codeOverlay" role="dialog" aria-modal="true" aria-labelledby="codeTitle">
+  <div class="dialog win">
+    <h2 id="codeTitle">Your completion code</h2>
+    <div class="code-value" id="codeValue" aria-live="polite"></div>
+    <p>Write this code down, then open the form and enter it.</p>
+    <a class="btn linkbtn" id="formLink" href="https://docs.google.com/forms/d/e/1FAIpQLSer8svozASAB6KKgeBGzRPnHVMgAR99IRy6fHHPpbgkUjcX6w/viewform?usp=publish-editor" target="_blank" rel="noopener noreferrer">Open the Google Form</a>
+    <button class="btn alt" id="codeClose" type="button">Close</button>
   </div>
 </div>
 
@@ -492,6 +523,7 @@ button {
   "use strict";
 
   var MAX_STRIKES = 5;
+  var CODE_THRESHOLD = 17;
 
   var EVENTS = [
     { id: 1, name: "Proclamation of 1763", year: "1763",
@@ -540,6 +572,7 @@ button {
   var $ = function (id) { return document.getElementById(id); };
   var eventsEl = $("events"), bucketsEl = $("buckets"), msgEl = $("msg"),
       scoreEl = $("score"), overlay = $("overlay"), dialog = $("dialog"), barEl = $("bar");
+  var codeBtn = $("codeBtn"), ovCodeBtn = $("ovCodeBtn"), codeOverlay = $("codeOverlay");
 
   var state = null;
   var bucketMsgTimers = {};
@@ -588,12 +621,14 @@ button {
 
   /* ---------- State ---------- */
   function reset() {
-    state = { strikes: 0, placed: {}, over: false, selected: null };
+    state = { strikes: 0, placed: {}, over: false, selected: null, unlocked: false, justUnlocked: false };
     GRIEVANCES.forEach(function (g) { state.placed[g.id] = []; });
     buildEvents();
     buildBuckets();
     for (var i = 0; i < MAX_STRIKES; i++) $("seal" + i).classList.remove("broken");
     overlay.classList.remove("show");
+    codeOverlay.classList.remove("show");
+    updateCodeButtons();
     say("info", "Choose an event and match it to a grievance.");
     updateScore();
   }
@@ -601,7 +636,35 @@ button {
   function matchedTotal() {
     return GRIEVANCES.reduce(function (n, g) { return n + state.placed[g.id].length; }, 0);
   }
-  function updateScore() { scoreEl.textContent = matchedTotal() + "/" + TOTAL + " matched"; }
+  function updateScore() {
+    var n = matchedTotal();
+    scoreEl.textContent = n + "/" + TOTAL + " matched";
+    if (n >= CODE_THRESHOLD && !state.unlocked) {
+      state.unlocked = true;
+      state.justUnlocked = true;
+      updateCodeButtons();
+    }
+  }
+
+  function updateCodeButtons() {
+    codeBtn.hidden = !state.unlocked;
+    ovCodeBtn.hidden = !state.unlocked;
+    codeBtn.classList.toggle("pulse", state.unlocked);
+  }
+
+  /* Completion code: the current 24-hour time (HHMM), written backwards */
+  function makeCode() {
+    var d = new Date();
+    var hh = ("0" + d.getHours()).slice(-2);
+    var mm = ("0" + d.getMinutes()).slice(-2);
+    return (hh + mm).split("").reverse().join("");
+  }
+  function showCode() {
+    $("codeValue").textContent = makeCode();
+    codeOverlay.classList.add("show");
+    $("codeClose").focus();
+  }
+  function hideCode() { codeOverlay.classList.remove("show"); }
 
   function updateCount(gid) {
     var g = GRIEVANCES.filter(function (x) { return x.id === gid; })[0];
@@ -663,6 +726,10 @@ button {
         say("ok", "Correct! Grievance " + gid + " is complete.");
       } else {
         say("ok", "Correct! " + ev.name + " belongs with grievance " + gid + ".");
+      }
+      if (state.justUnlocked) {
+        state.justUnlocked = false;
+        say("ok", CODE_THRESHOLD + " matched! The Generate Completion Code button is now available.");
       }
       if (matchedTotal() === TOTAL) finish(true);
       return;
@@ -791,6 +858,14 @@ button {
     var b = e.target.closest(".bucket");
     if (!b || state.over) return;
     if (state.selected !== null) attempt(state.selected, +b.dataset.g);
+  });
+
+  /* Completion code buttons */
+  codeBtn.addEventListener("click", showCode);
+  ovCodeBtn.addEventListener("click", showCode);
+  $("codeClose").addEventListener("click", hideCode);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hideCode();
   });
 
   /* Reset buttons */
