@@ -446,7 +446,7 @@ button {
     <ul>
       <li>Drag each event onto the grievance it inspired. On a phone or with a keyboard, select an event, then select a grievance.</li>
       <li>An event can match more than one grievance, so try every event more than once.</li>
-      <li>Press the <b>i</b> button on an event to read about it. Three wrong placements break all three seals and you must start over.</li>
+      <li>Press the <b>i</b> button on an event to read about it. Five wrong placements break all five seals and you must start over.</li>
     </ul>
   </div>
 </header>
@@ -457,6 +457,8 @@ button {
     <span class="seal" id="seal0"></span>
     <span class="seal" id="seal1"></span>
     <span class="seal" id="seal2"></span>
+    <span class="seal" id="seal3"></span>
+    <span class="seal" id="seal4"></span>
   </div>
   <div class="msg" id="msg" role="status" aria-live="polite">Choose an event and match it to a grievance.</div>
   <div class="score" id="score">0/23 matched</div>
@@ -489,7 +491,7 @@ button {
 (function () {
   "use strict";
 
-  var MAX_STRIKES = 3;
+  var MAX_STRIKES = 5;
 
   var EVENTS = [
     { id: 1, name: "Proclamation of 1763", year: "1763",
@@ -682,10 +684,10 @@ button {
     state.over = true;
     setSelected(null);
     dialog.className = "dialog" + (won ? " win" : "");
-    $("ovTitle").textContent = won ? "Independence declared!" : "Three strikes";
+    $("ovTitle").textContent = won ? "Independence declared!" : "Five strikes";
     $("ovText").textContent = won
       ? "You matched all " + TOTAL + " events to the grievances they inspired. Well done."
-      : "All three seals are broken. Reset the game and start over.";
+      : "All five seals are broken. Reset the game and start over.";
     overlay.classList.add("show");
     $("ovBtn").textContent = won ? "Play again" : "Reset and start over";
     $("ovBtn").focus();
